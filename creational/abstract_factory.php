@@ -1,312 +1,110 @@
 <?php
-class Window
+interface Encoder
 {
-    private $width = 0;
-    
-    private $height = 0;
-    
-    /**
-     *
-     * @var Border
-     */
-    private $border = null;
-    
-    private $fileNames = [];
-    
-    private $components = [];
-    
-    public function __construct(int $width, int $height, Border $border)
+    public function encode($data) :string;
+}
+
+interface Decoder
+{
+    public function decode(string $data);
+}
+
+class JsonEncoder implements Encoder
+{
+    public function encode($data) :string
     {
-        $this->width = $width;
-        $this->height = $height;
-        $this->border = $border;
+        return json_encode($data);
+    }
+}
+
+class JsonDecoder implements Decoder
+{
+    public function decode(string $data)
+    {
+        return json_decode($data);
+    }
+}
+
+class XmlEncode implements Encoder
+{
+    public function encode($data) :string
+    {
+//        var_dump($data);
+//        $xmlData = new SimpleXMLElement($data);
+        return $data->asXML();
+    }
+}
+
+class XmlDecode implements Decoder
+{
+    public function decode(string $data)
+    {
+        return new SimpleXMLElement($data);
+    }
+}
+
+abstract class FormatConverterFactory
+{
+    abstract public function getDecoder();
+    abstract public function getEncoder();
+}
+
+class JsonConverterFactory extends FormatConverterFactory
+{
+    public function getDecoder()
+    {
+        return new JsonDecoder();
     }
     
-    public function setFileNames(array $fileNames) :void
+    public function getEncoder()
     {
-        $this->fileNames = $fileNames;
+        return new JsonEncoder();
     }
-    
-    public function addComponent(Component $component, array $options) :void
-    {
-        $this->components[] = [$component, $options];
+}
+
+class XmlConverterFactory extends FormatConverterFactory
+{
+    public function getDecoder() {
+        return new XmlDecode();
     }
-    
-    public function render() :string
+
+    public function getEncoder() {
+        return new XmlEncode();
+    }
+}
+
+class NumberSubstractor
+{
+    public function substract(string $data, int $number, FormatConverterFactory $factory)
     {
-        $window[] = $this->border->getTopLeftCorner()
-                  . str_repeat($this->border->getHorizontalBorder(), $this->width - 2)
-                  . $this->border->getTopRightCorner()
-                  . PHP_EOL;
+        $decoder = $factory->getDecoder();
         
-        for ($y = 2, $i = 0; $y < $this->height; $y++, $i++) {
-            $window[] = $this->border->getVerticalBorder()
-                        . ' '
-                        . (isset($this->fileNames[$i]) ? $this->fileNames[$i] : '')
-                        . str_repeat(' ', $this->width - 2 - mb_strlen(isset($this->fileNames[$i]) ? $this->fileNames[$i] : '') - 1)
-                      . $this->border->getVerticalBorder()
-                      . PHP_EOL;
-        }
+        $decodedData = $decoder->decode($data);
         
-        $window[] = $this->border->getBottomLeftCorenr()
-                  . str_repeat($this->border->getHorizontalBorder(), $this->width - 2)
-                  . $this->border->getBottomRightCorner()
-                  . PHP_EOL;
+        $decodedData->first -= $number;
+        $decodedData->second -= $number;
+        $decodedData->third -= $number;
         
-        $window = $this->renderComponents($window);
+        $encoder = $factory->getEncoder();
         
-        return implode('', $window);
-    }
-    
-    private function renderComponents(array $window) :array
-    {
-        foreach ($this->components as list($component, $options)) {
-            $row = $column = 0;
-            
-            if ($options['position']['vertical'] === 'top') {
-                $row = 0;
-            } else {
-                $row = $this->height - 1;
-            }
-            
-            if ($options['position']['horizontal'] === 'left') {
-                $column = 2;
-            } else {
-                $column = $this->width - $component->getLenght() - 2;
-            }
-            
-            $window[$row] = mb_substr_replace($window[$row], $component->getView(), $column, $component->getLenght());
-        }
-        
-        return $window;
+        return $encoder->encode($decodedData);
     }
 }
 
-abstract class Border
-{
-    public $horizontalBorder = '';
-    public $verticalBorder = '';
-    public $topLeftCorner = '';
-    public $topRightCorner = '';
-    public $bottomLeftCorenr = '';
-    public $bottomRightCorner = '';
-    
-    function getHorizontalBorder() :string
-    {
-        return $this->horizontalBorder;
-    }
+$json = '{"first": 10, "second": 20, "third": 30}';
+$xml = '<root><first>10</first><second>20</second><third>30</third></root>';
 
-    function getVerticalBorder() :string
-    {
-        return $this->verticalBorder;
-    }
+echo 'Input:' . PHP_EOL;
+echo 'JSON: ' . $json . PHP_EOL;
+echo 'XML: ' . $xml . PHP_EOL;
 
-    function getTopLeftCorner() :string
-    {
-        return $this->topLeftCorner;
-    }
+$numberSubstractor = new NumberSubstractor();
+$json = $numberSubstractor->substract($json, 3, new JsonConverterFactory());
 
-    function getTopRightCorner() :string
-    {
-        return $this->topRightCorner;
-    }
+echo PHP_EOL . PHP_EOL;
 
-    function getBottomLeftCorenr() :string
-    {
-        return $this->bottomLeftCorenr;
-    }
+$xml = $numberSubstractor->substract($xml, 5, new XmlConverterFactory());
 
-    function getBottomRightCorner() :string
-    {
-        return $this->bottomRightCorner;
-    }
-}
-
-class DoubleLineBorder extends Border
-{
-    public function __construct()
-    {
-        $this->horizontalBorder = '═';
-        $this->verticalBorder = '║';
-        $this->topLeftCorner = '╔';
-        $this->topRightCorner = '╗';
-        $this->bottomLeftCorenr = '╚';
-        $this->bottomRightCorner = '╝';
-    }
-}
-
-class SingleLineBorder extends Border
-{
-    public function __construct()
-    {
-        $this->horizontalBorder = '─';
-        $this->verticalBorder = '│';
-        $this->topLeftCorner = '┌';
-        $this->topRightCorner = '┐';
-        $this->bottomLeftCorenr = '└';
-        $this->bottomRightCorner = '┘';
-    }
-}
-
-abstract class Component
-{
-    protected $view = null;
-    protected $lenght = null;
-    
-    protected abstract function render() :string;
-    
-    public function getView(bool $rerender = false) :string
-    {
-        if ($rerender === false || $this->view === null) {
-            $this->view = $this->render(); 
-            $this->lenght = strlen($this->view);
-        }
-        
-        return $this->view;
-    }
-    
-    public function getLenght() :int
-    {
-        if ($this->view === null) {
-            $this->view = $this->render(); 
-            $this->lenght = mb_strlen($this->view);
-        }
-        
-        return $this->lenght;
-    }
-}
-
-class DriverLetterComponent extends Component
-{
-    private $letters = [];
-    
-    function __construct(array $letters) {
-        $this->letters = $letters;
-    }
-
-    protected function render(): string {
-        $component = '';
-        foreach ($this->letters as $letter) {
-            $component .= ' '. $letter;
-        }
-        
-        return '[' . $component . ' ]';
-    }
-    
-    public function getLenght() :int {
-        return parent::getLenght();
-    }
-}
-
-class CurrentPathComponent extends Component
-{
-    private $path = '';
-    
-    public function __construct(string $path)
-    {
-        $this->path = $path;
-    }
-    
-    protected function render() :string
-    {
-        return '[ ' . $this->path . ' ]';
-    }
-}
-
-class DateComponent extends Component
-{
-    /**
-     *
-     * @var DateTime
-     */
-    private $date = null;
-    
-    public function __construct()
-    {
-        $this->date = new DateTime();
-    }
-    
-    protected function render() :string
-    {
-        return '[ ' . $this->date->format('d-m-Y') . ' ]';
-    }
-}
-
-interface WindowFactory
-{
-    public function createWindow() :Window;
-}
-
-class VerboseWindowFactory implements WindowFactory
-{
-    public function createWindow(): Window {
-        $border = new DoubleLineBorder();
-        $driverComponent = new DriverLetterComponent(['A', 'C', 'D']);
-        $dateComponent = new DateComponent();
-        $currentPathComponent = new CurrentPathComponent("C:/Windows/system");
-        $window = new Window(50, 10, $border);
-        
-        $window->addComponent($driverComponent, ['position' => [
-            'horizontal' => 'left',
-            'vertical' => 'bottom'
-        ]]);
-        $window->addComponent($dateComponent, ['position' => [
-            'horizontal' => 'right',
-            'vertical' => 'bottom'
-        ]]);
-        $window->addComponent($currentPathComponent, ['position' => [
-            'horizontal' => 'left',
-            'vertical' => 'top'
-        ]]);
-
-        return $window;
-    }
-}
-
-class SimpleWindowFactory implements WindowFactory
-{
-    public function createWindow() :Window {
-        $border = new SingleLineBorder();
-        $window = new Window(50, 10, $border);
-        return $window;
-    }
-}
-
-$windowFactory = new VerboseWindowFactory();
-$verboseWindow = $windowFactory->createWindow();
-$verboseWindow->setFileNames(['folder1', 'folder2', 'folder folder3']);
-echo $verboseWindow->render();
-
-echo PHP_EOL . PHP_EOL . PHP_EOL;
-
-$windowFactory = new SimpleWindowFactory();
-$simpleWindow = $windowFactory->createWindow();
-$simpleWindow->setFileNames(['folder1', 'folder2', 'folder folder3']);
-echo $simpleWindow->render();
-
-function mb_substr_replace($string, $replacement, $start, $length = null, $encoding = null) {
-
-    $string_length = (is_null($encoding) === true) ? mb_strlen($string) : mb_strlen($string, $encoding);
-
-    if ($start < 0) {
-        $start = max(0, $string_length + $start);
-    } else if ($start > $string_length) {
-        $start = $string_length;
-    }
-
-    if ($length < 0) {
-        $length = max(0, $string_length - $start + $length);
-    } else if ((is_null($length) === true) || ($length > $string_length)) {
-        $length = $string_length;
-    }
-
-    if (($start + $length) > $string_length) {
-        $length = $string_length - $start;
-    }
-
-    if (is_null($encoding) === true) {
-        return mb_substr($string, 0, $start) . $replacement . mb_substr($string, $start + $length, $string_length - $start - $length);
-    }
-
-    return mb_substr($string, 0, $start, $encoding) . $replacement . mb_substr($string, $start + $length, $string_length - $start - $length, $encoding);
-}
+echo 'Output:' . PHP_EOL;
+echo 'JSON: ' . $json . PHP_EOL;
+echo 'XML: ' . $xml . PHP_EOL;
