@@ -2,6 +2,8 @@
 
 class Warrior
 {
+    public static $instances = 0;
+    public $instance = 0;
     public $attack = 8;
     public $defense = 5;
     public $isDead = false;
@@ -12,57 +14,96 @@ class Warrior
     }
 }
 
-class Barracks
+abstract class HumanResources
 {
-    private static $warriorsWaiting = array();
-    private static $warriorsFighting = array();
-
-    public static function getWarrior()
+    protected $waiting = [];
+    protected $busy = [];
+    
+    protected function getOneHuman()
     {
-        if (empty(self::$warriorsWaiting)) {
-            $warrior = new Warrior();
-            array_push(self::$warriorsFighting, $warrior);
-            return $warrior;
+        if (empty($this->waiting)) {
+            $humanResource = $this->createNewHumanResource();
+            $this->busy[spl_object_hash($humanResource)] = $humanResource;
+            return $humanResource;
         } else {
-            $numberOfWarriorsWaiting = count(self::$warriorsWaiting);
-            foreach (self::$warriorsWaiting as $warrior) {
-                if ($warrior->isDead) {
-                    self::$warriorsWaiting = array_diff(self::$warriorsWaiting, array($warrior));
-                } else {
-                    self::$warriorsWaiting = array_diff(self::$warriorsWaiting, array($warrior));
-                    array_push(self::$warriorsFighting, $warrior);
-                    return $warrior;
+            foreach ($this->waiting as $humanRsourceKey => $humanResource) {
+                unset($this->waiting[$humanRsourceKey]);
+                if ($this->shoudlBeRemovedOnReceive($humanResource) === false) {
+                    $this->busy[$humanRsourceKey] = $humanResource;
+                    return $humanResource;
                 }
             }
+            return $this->getOneHuman();
         }
+    }
+    
+    protected function returnOneHuman($humanRsource)
+    {
+        unset($this->busy[spl_object_hash($humanRsource)]);
+        if ($this->shoudlBeRemovedOnReturn($humanRsource) === false) {
+            $this->waiting[spl_object_hash($humanRsource)] = $humanRsource;
+        }
+    }
+    
+    abstract protected function createNewHumanResource();
+    
+    abstract protected function shoudlBeRemovedOnReturn($hr) : bool;
+    abstract protected function shoudlBeRemovedOnReceive($hr) : bool;
+}
+
+class Barracks extends HumanResources
+{
+    public function getWarrior()
+    {
+        return $this->getOneHuman();
     }
 
     public function quater($warrior)
     {
-        array_push(self::$warriorsWaiting, $warrior);
-        if (($key = array_search($warrior, self::$warriorsFighting)) !== false) {
-            unset(self::$warriorsFighting[$key]);
-        }
+        $this->returnOneHuman($warrior);
     }
+    
+    protected function createNewHumanResource()
+    {
+        $hr = new Warrior();
+        $hr->instance = ++Warrior::$instances;
+        return $hr;
+    }
+
+    protected function shoudlBeRemovedOnReceive($hr): bool
+    {
+        return false;
+    }
+
+    protected function shoudlBeRemovedOnReturn($hr): bool
+    {
+        return $hr->isDead;
+    }
+
 }
 
+$barracks = new Barracks();
 $warriors = array();
 for ($i = 0; $i < 5; $i++) {
-    $warrior = Barracks::getWarrior();
-    echo $warrior . PHP_EOL;
+    $warrior = $barracks->getWarrior();
+    echo 'Warrior: ' . $warrior->instance . ' isDead=' . ($warrior->isDead ? 'true' : 'false') . PHP_EOL;
     $warriors[] = $warrior;
 }
 
+echo PHP_EOL;
+echo PHP_EOL;
+
 foreach ($warriors as $warrior) {
     $warrior->isDead = (boolean) rand(0, 1);
-    Barracks::quater($warrior);
+    echo 'Warrior: ' . $warrior->instance . ' isDead=' . ($warrior->isDead ? 'true' : 'false') . PHP_EOL;
+    $barracks->quater($warrior);
 }
 
 echo PHP_EOL;
 echo PHP_EOL;
 
 for ($i = 0; $i < 5; $i++) {
-    $warrior = Barracks::getWarrior();
-    echo $warrior . PHP_EOL;
+    $warrior = $barracks->getWarrior();
+    echo 'Warrior: ' . $warrior->instance . ' isDead=' . ($warrior->isDead ? 'true' : 'false') . PHP_EOL;
     $warriors[] = $warrior;
 }
