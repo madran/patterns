@@ -1,130 +1,112 @@
 <?php
-class Warrior
+
+interface Authentication
 {
-    private $activeWeapon;
-
-    public function slash()
+    public function authenticate(string $userLogin, string $password) : bool;
+    public function isAuthenticated() : bool;
+}
+ 
+class UserAuthentication implements Authentication
+{
+    private $isAuthenticated = false;
+    
+    public function authenticate(string $userLogin, string $password) : bool
     {
-        return $this->activeWeapon;
+        echo 'Standard authenticate user: ' . $userLogin;
+        
+        $this->isAuthenticated = true;
+        return true;
     }
-
-    public function bash()
+    
+    public function isAuthenticated() : bool
     {
-        return $this->activeWeapon;
-    }
-
-    public function setActiveWeapon($weapon)
-    {
-        $this->activeWeapon = $weapon;
+        return $this->isAuthenticated;
     }
 }
 
-class Sword
+class GoogleUserAuthentication
 {
-    public function __toString()
+    private $login;
+    private $password;
+    
+    public function setLogin(string $login)
     {
-        return 'Slash, slash...';
+        $this->login = $login;
+    }
+    
+    public function setPassword(string $password)
+    {
+        $this->password = $password;
+    }
+    
+    public function authenticateUser() : bool
+    {
+        echo 'Google authenticate user: ' . $this->login;
+        return true;
     }
 }
 
-class Hammer
+class GoogleUserAuthenticationAdapter implements Authentication
 {
-    public function __toString()
+    private $userAuth;
+    private $isAuthenticated = false;
+    
+    public function __construct()
     {
-        return 'Bash, bash...';
+        $this->userAuth = new GoogleUserAuthentication();
+    }
+    
+    public function authenticate(string $userLogin, string $password) : bool
+    {
+        $this->userAuth->setLogin($userLogin);
+        $this->userAuth->setPassword($password);
+        $this->isAuthenticated = $this->userAuth->authenticateUser();
+        return $this->isAuthenticated;
+    }
+    
+    public function isAuthenticated() : bool
+    {
+        return $this->isAuthenticated;
     }
 }
 
-class Knife
+class FileManager
 {
-    public function __toString()
+    private $authenticationManager = null;
+    
+    public function setAuthenticationManager($authenticationManager)
     {
-        return 'Cut, cut...';
+        $this->authenticationManager = $authenticationManager;
+    }
+
+    public function getRecentFiles()
+    {
+        if ($this->authenticationManager->isAuthenticated()) {
+            echo 'Files files files.' . PHP_EOL;
+        }
     }
 }
 
-class Mallet
-{
-    public function __toString()
-    {
-        return 'Tenderize, tenderize...';
-    }
-}
-
-class Kitchen
-{
-    public function prepareMeal($cook)
-    {
-        $cook->setActiveTool(new Knife());
-        echo $cook->cut() . PHP_EOL;
-        $cook->setActiveTool(new Mallet());
-        echo $cook->tenderize() . PHP_EOL;
-    }
-}
-
-abstract class AbstractCook
-{
-    abstract public function setActiveTool($tool);
-    abstract public function cut();
-    abstract public function tenderize();
-}
-
-class Housewife extends AbstractCook
-{
-    private $activeTool;
-
-    public function setActiveTool($tool)
-    {
-        $this->activeTool = $tool;
-    }
-
-    public function cut()
-    {
-        return $this->activeTool;
-    }
-
-    public function tenderize()
-    {
-        return $this->activeTool;
-    }
-}
-
-class CookAdapter extends AbstractCook
-{
-    private $warrior;
-
-    public function __construct($person)
-    {
-        $this->warrior = $person;
-    }
-
-    public function setActiveTool($tool)
-    {
-        $this->warrior->setActiveWeapon($tool);
-    }
-
-    public function cut()
-    {
-        return $this->warrior->slash();
-    }
-
-    public function tenderize()
-    {
-        return $this->warrior->bash();
-    }
-}
-echo 'Warrior:' . PHP_EOL;
-$warrior = new Warrior();
-$warrior->setActiveWeapon(new Knife());
-echo $warrior->slash() . PHP_EOL;
-$warrior->setActiveWeapon(new Hammer());
-echo $warrior->bash() . PHP_EOL;
+$userAuthentication = new UserAuthentication();
+$userAuthentication->authenticate('kamilka', 'pass');
 
 echo PHP_EOL;
-echo 'Housewife:' . PHP_EOL;
-$kitchen = new Kitchen();
-$kitchen->prepareMeal(new Housewife());
+echo PHP_EOL;
+
+$googleUserAuthentication = new GoogleUserAuthenticationAdapter();
+$googleUserAuthentication->authenticate('lukasz', 'pass');
 
 echo PHP_EOL;
-echo 'Warrior adapted to housewife:' . PHP_EOL;
-$kitchen->prepareMeal(new CookAdapter(new Warrior()));
+echo PHP_EOL;
+
+echo PHP_EOL;
+echo 'Recent files with user auhentication:' . PHP_EOL;
+$fileManager = new FileManager();
+$fileManager->setAuthenticationManager($userAuthentication);
+$fileManager->getRecentFiles();
+
+echo PHP_EOL;
+echo 'Recent files with google user auhentication:' . PHP_EOL;
+$fileManager->setAuthenticationManager($googleUserAuthentication);
+$fileManager->getRecentFiles();
+
